@@ -9,7 +9,7 @@ import com.skala.stock.domain.Stock;
 
 import lombok.Getter;
 
-// player가 처음 stock을 구매했을때 반환되는 응답 DTO
+// player가 처음 stock을 구매했을때 반환되는 응답 DTO -> "생성" 작업의 결과를 반환
 @Getter
 public class CreatePlayerStockResponse {
     private final Player player;
