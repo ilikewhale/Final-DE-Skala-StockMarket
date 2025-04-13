@@ -7,9 +7,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Getter
-public class CreatePlayerStockRequest {
-    private String playerId;
+public class DeletePlayerStockRequest {
+    private Long playerStockId;
     private String playerPw;
-    private Long stockId;
-    private Long quantity;
 }

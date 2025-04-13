@@ -59,6 +59,14 @@ public class Player {
         this.playerMoney += extraPlayerMoney;
     }
 
+    public void payMoney(Long money) {
+        validateNumber(money);
+        if (playerMoney - money < 0) {
+            throw new IllegalArgumentException("More money entered than you have");
+        }
+        this.playerMoney -= money;
+    }
+
     public void validateNumber(Long num){ //0보다 작은 숫자는 예외를 발생시킨다.
         if (num < 0){
             throw new IllegalArgumentException("validation error in number");
