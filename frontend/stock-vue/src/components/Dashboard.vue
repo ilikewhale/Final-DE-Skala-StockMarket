@@ -109,16 +109,6 @@ onMounted(() => {
         <div class="welcome-section">
           <h1>대시보드</h1>
           <p>실시간 주식 시장 정보와 거래를 한눈에 확인하세요.</p>
-          
-          <div class="user-profile-small">
-            <div class="profile-image-container">
-              <img :src="profileImage" alt="프로필 이미지" class="profile-image">
-              <label class="image-upload-label">
-                <input type="file" @change="uploadProfileImage" accept="image/*" class="image-upload">
-                <span class="upload-icon">📷</span>
-              </label>
-            </div>
-          </div>
         </div>
         
         <div class="balance-card auth-card">
