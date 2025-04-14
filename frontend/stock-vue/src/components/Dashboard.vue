@@ -364,7 +364,7 @@ h1, h2, h3 {
   margin-left: 15px;
 }
 
-.avatar {
+/* .avatar {
   width: 50px;
   height: 50px;
   background: linear-gradient(135deg, #4279ff 0%, #2563eb 100%);
@@ -376,7 +376,7 @@ h1, h2, h3 {
   font-weight: bold;
   font-size: 20px;
   box-shadow: 0 4px 10px rgba(66, 121, 255, 0.3);
-}
+} */
 
 .user-info {
   flex: 1;

@@ -853,18 +853,18 @@ h1, h2, h3 {
 }
 
 .avatar-container {
-  margin-right: 5px;
-  margin-left: 0px;
+  margin-right: 15px;
+  margin-left: 15px;
 }
 
 .user-info {
   flex: 1;
-  margin-left: -5px;
+  margin-left: 5px;
 }
 
 .profile-image {
-  width: 50px;
-  height: 50px;
+  width: 70%;
+  height: 50%;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid #60a5fa;
@@ -877,14 +877,14 @@ h1, h2, h3 {
   color: #2d3748;
   margin-bottom: 4px;
   text-align: left; 
-  margin-left: -5px;
+  margin-left: -15px;
 }
 
 .user-balance {
   font-size: 18px;
   color: #4a5568;
   font-weight: 500;
-  margin-left: -5px;
+  margin-left: -15px;
   text-align: left;
 }
 
@@ -930,7 +930,6 @@ h1, h2, h3 {
 
 .menu-item.logout {
   color: #e53e3e;
-  margin-top: 30px;
 }
 
 /* 메인 콘텐츠 스타일 */
