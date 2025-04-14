@@ -1,5 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import Home from '../components/Home.vue'
 import Login from '../components/Login.vue'
 import SignUp from '../components/SignUp.vue'
 import UserTransaction from '../components/UserTransaction.vue'
@@ -10,11 +9,6 @@ const routes = [
     path: '/',
     name: 'Login',
     component: Login
-  },
-  {
-    path: '/home',
-    name: 'Home',
-    component: Home
   },
   {
     path: '/signup',

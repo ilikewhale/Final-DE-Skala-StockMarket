@@ -1,587 +1,73 @@
-<script setup>
+
+<script setup lang="ts">
+import AllStocks from './AllStocks.vue';
+import { useRoute } from 'vue-router';
+import StockTrading from './StockTrading.vue';
+import { useRouter } from 'vue-router'
 import { ref, onMounted, computed } from 'vue';
-import { useRouter } from 'vue-router';
 import axios from 'axios';
 
-const router = useRouter();
-const isLoading = ref(true);
-const errorMessage = ref('');
+const router = useRouter()
+const route = useRoute();
+const playerId = route.query.playerId as string | '';
+const player = ref<Player | null>(null);
+const profileImage = ref('image.jpg'); // 기본 이미지 경로
 
-// 사용자 정보
-const playerInfo = ref({
-  playerId: '',
-  playerMoney: 0,
-  lastLoginDate: ''
+interface Player {
+  id: number;
+  playerId: string;
+  playerPw: string;
+  playerMoney: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const fetchPlayerInfo = async () => {
+  try {
+    const res = await axios.get(`/api/player/${playerId}`)
+    player.value = res.data
+  } catch (err) {
+    console.error('유저 정보 불러오기 실패:', err)
+  }
+}
+
+const formattedMoney = computed(() => {
+  if (!player.value || player.value.playerMoney === undefined) return '₩0';
+  return new Intl.NumberFormat('ko-KR', {
+    style: 'currency',
+    currency: 'KRW',
+    maximumFractionDigits: 0
+  }).format(player.value?.playerMoney);
 });
 
-// 보유 주식 정보
-const holdings = ref([]);
+const logout = () => {
+  router.push('/')
+}
 
-// 주식 시장 정보
-const marketData = ref([]);
-
-// 차트 데이터
-const selectedStock = ref(null);
-const stockHistory = ref([]);
-
-// 시간 데이터 (x축)
-const timeLabels = ref([]);
-
-// 기본 페이지 설정
-const currentPage = ref('overview'); // 'overview', 'portfolio', 'market', 'trade'
-
-// 검색 및 정렬
-const searchStock = ref('');
-const sortBy = ref('code');
-
-// 거래 관련
-const stockToBuy = ref('');
-const stockToSell = ref('');
-const quantity = ref(1);
-
-// 현재 시장 전체 상태
-const marketStatus = ref({
-  total: 0,
-  up: 0,
-  down: 0,
-  unchanged: 0
-});
-
-// 사용자 데이터 로드
-const loadUserData = async () => {
-  isLoading.value = true;
-  try {
-    // API 엔드포인트는 실제 백엔드에 맞게 수정 필요
-    const response = await axios.get('/api/player/info');
-    playerInfo.value = response.data;
-    loadHoldings();
-  } catch (error) {
-    console.error('사용자 정보 로드 오류:', error);
-    errorMessage.value = '사용자 정보를 불러오는데 실패했습니다.';
-    // 로그인 페이지로 리다이렉트 (인증 오류 시)
-    if (error.response && error.response.status === 401) {
-      router.push('/login');
-    }
-  } finally {
-    isLoading.value = false;
-  }
-};
-
-// 보유 주식 정보 로드
-const loadHoldings = async () => {
-  try {
-    const response = await axios.get('/api/player/holdings');
-    holdings.value = response.data;
-  } catch (error) {
-    console.error('보유 주식 정보 로드 오류:', error);
-    errorMessage.value = '보유 주식 정보를 불러오는데 실패했습니다.';
-  }
-};
-
-// 주식 시장 정보 로드
-const loadMarketData = async () => {
-  try {
-    const response = await axios.get('/api/market/stocks');
-    marketData.value = response.data;
+const uploadProfileImage = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  if (input.files && input.files[0]) {
+    const file = input.files[0];
+    const reader = new FileReader();
     
-    // 시장 상태 계산
-    const total = marketData.value.length;
-    const up = marketData.value.filter(stock => stock.priceChange > 0).length;
-    const down = marketData.value.filter(stock => stock.priceChange < 0).length;
-    const unchanged = total - up - down;
-    
-    marketStatus.value = { total, up, down, unchanged };
-  } catch (error) {
-    console.error('주식 시장 정보 로드 오류:', error);
-    errorMessage.value = '주식 시장 정보를 불러오는데 실패했습니다.';
-  }
-};
-
-// 주식 구매 함수
-const buyStock = async () => {
-  if (!stockToBuy.value || quantity.value <= 0) {
-    errorMessage.value = '주식 코드와 수량을 올바르게 입력해주세요.';
-    return;
-  }
-  
-  try {
-    const response = await axios.post('/api/trade/buy', {
-      stockCode: stockToBuy.value,
-      quantity: quantity.value
-    });
-    
-    if (response.data.success) {
-      alert('주식 구매 성공!');
-      loadUserData(); // 사용자 정보 및 보유 주식 업데이트
-      loadMarketData(); // 시장 정보 업데이트
-      
-      // 입력값 초기화
-      stockToBuy.value = '';
-      quantity.value = 1;
-    } else {
-      errorMessage.value = response.data.message || '주식 구매에 실패했습니다.';
-    }
-  } catch (error) {
-    console.error('주식 구매 오류:', error);
-    errorMessage.value = '주식 구매 중 오류가 발생했습니다.';
-  }
-};
-
-// 주식 판매 함수
-const sellStock = async () => {
-  if (!stockToSell.value || quantity.value <= 0) {
-    errorMessage.value = '주식 코드와 수량을 올바르게 입력해주세요.';
-    return;
-  }
-  
-  try {
-    const response = await axios.post('/api/trade/sell', {
-      stockCode: stockToSell.value,
-      quantity: quantity.value
-    });
-    
-    if (response.data.success) {
-      alert('주식 판매 성공!');
-      loadUserData(); // 사용자 정보 및 보유 주식 업데이트
-      loadMarketData(); // 시장 정보 업데이트
-      
-      // 입력값 초기화
-      stockToSell.value = '';
-      quantity.value = 1;
-    } else {
-      errorMessage.value = response.data.message || '주식 판매에 실패했습니다.';
-    }
-  } catch (error) {
-    console.error('주식 판매 오류:', error);
-    errorMessage.value = '주식 판매 중 오류가 발생했습니다.';
-  }
-};
-
-// 주식 상세 정보 불러오기
-const loadStockDetail = async (stockCode) => {
-  selectedStock.value = marketData.value.find(s => s.stockCode === stockCode);
-  
-  try {
-    const response = await axios.get(`/api/market/stock/${stockCode}/history`);
-    stockHistory.value = response.data.priceHistory;
-    timeLabels.value = response.data.timeLabels;
-  } catch (error) {
-    console.error('주식 상세 정보 로드 오류:', error);
-    errorMessage.value = '주식 상세 정보를 불러오는데 실패했습니다.';
-  }
-};
-
-// 포트폴리오 총 가치 계산
-const totalPortfolioValue = computed(() => {
-  let total = 0;
-  
-  if (holdings.value.length > 0 && marketData.value.length > 0) {
-    total = holdings.value.reduce((sum, holding) => {
-      const stock = marketData.value.find(s => s.stockCode === holding.stockCode);
-      return sum + (stock ? stock.currentPrice * holding.quantity : 0);
-    }, 0);
-  }
-  
-  return total + playerInfo.value.playerMoney;
-});
-
-// 필터링된 시장 데이터
-const filteredMarketData = computed(() => {
-  return marketData.value
-    .filter(stock => 
-      stock.stockCode.toLowerCase().includes(searchStock.value.toLowerCase()) ||
-      stock.stockName.toLowerCase().includes(searchStock.value.toLowerCase())
-    )
-    .sort((a, b) => {
-      switch (sortBy.value) {
-        case 'code':
-          return a.stockCode.localeCompare(b.stockCode);
-        case 'name':
-          return a.stockName.localeCompare(b.stockName);
-        case 'price':
-          return b.currentPrice - a.currentPrice;
-        case 'change':
-          return b.priceChange - a.priceChange;
-        default:
-          return 0;
+    reader.onload = (e) => {
+      if (e.target && typeof e.target.result === 'string') {
+        profileImage.value = e.target.result;
       }
-    });
-});
-
-// 로그아웃 함수
-const logout = async () => {
-  try {
-    await axios.post('/api/auth/logout');
-    router.push('/login');
-  } catch (error) {
-    console.error('로그아웃 오류:', error);
+    };
+    
+    reader.readAsDataURL(file);
   }
 };
 
-// 초기 데이터 로드
 onMounted(() => {
-  loadUserData();
-  loadMarketData();
-});
+  fetchPlayerInfo();
+})
 </script>
-
 <template>
-  <div class="dashboard-container">
+  <div class="view-container">
     <div class="animated-bg"></div>
     
-    <!-- 상단 네비게이션 -->
-    <nav class="dashboard-nav">
-      <div class="logo-area">
-        <h2 class="stock-title">Stock Market</h2>
-      </div>
-      
-      <div class="nav-links">
-        <button @click="currentPage = 'overview'" 
-          :class="{ active: currentPage === 'overview' }">대시보드</button>
-        <button @click="currentPage = 'portfolio'" 
-          :class="{ active: currentPage === 'portfolio' }">포트폴리오</button>
-        <button @click="currentPage = 'market'" 
-          :class="{ active: currentPage === 'market' }">시장현황</button>
-        <button @click="currentPage = 'trade'" 
-          :class="{ active: currentPage === 'trade' }">거래</button>
-      </div>
-      
-      <div class="user-area">
-        <div class="user-info" v-if="!isLoading">
-          <span class="user-icon">👤</span>
-          <span class="user-id">{{ playerInfo.playerId }}</span>
-        </div>
-        <button @click="logout" class="logout-btn">로그아웃</button>
-      </div>
-    </nav>
-    
-    <!-- 로딩 화면 -->
-    <div v-if="isLoading" class="loading-container">
-      <div class="loading-spinner"></div>
-      <p>데이터를 불러오는 중입니다...</p>
-    </div>
-    
-    <!-- 오류 메시지 -->
-    <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
-    
-    <!-- 메인 컨텐츠 영역 -->
-    <div v-if="!isLoading" class="dashboard-content">
-      <!-- 개요 페이지 -->
-      <div v-if="currentPage === 'overview'" class="page-container">
-        <div class="dashboard-cards">
-          <div class="dashboard-card balance-card">
-            <h3>현재 자산</h3>
-            <div class="balance-amount">₩{{ playerInfo.playerMoney.toLocaleString() }}</div>
-            <div class="balance-subtitle">현금</div>
-          </div>
-          
-          <div class="dashboard-card portfolio-card">
-            <h3>포트폴리오 가치</h3>
-            <div class="portfolio-amount">₩{{ totalPortfolioValue.toLocaleString() }}</div>
-            <div class="portfolio-subtitle">전체 자산</div>
-          </div>
-          
-          <div class="dashboard-card stocks-card">
-            <h3>보유 주식 수</h3>
-            <div class="stocks-amount">{{ holdings.length }}종</div>
-            <div class="stocks-subtitle">주식 종류</div>
-          </div>
-          
-          <div class="dashboard-card market-card">
-            <h3>시장 현황</h3>
-            <div class="market-status">
-              <span class="up">↑ {{ marketStatus.up }}</span>
-              <span class="down">↓ {{ marketStatus.down }}</span>
-              <span class="unchanged">- {{ marketStatus.unchanged }}</span>
-            </div>
-            <div class="market-subtitle">상승/하락/변동없음</div>
-          </div>
-        </div>
-        
-        <div class="recent-activity">
-          <h3>최근 시장 주요 변동</h3>
-          <div class="activity-list">
-            <div v-for="(stock, index) in marketData.slice(0, 5)" :key="index" class="activity-item">
-              <div class="stock-code">{{ stock.stockCode }}</div>
-              <div class="stock-name">{{ stock.stockName }}</div>
-              <div class="stock-price">₩{{ stock.currentPrice.toLocaleString() }}</div>
-              <div :class="['stock-change', stock.priceChange > 0 ? 'up' : stock.priceChange < 0 ? 'down' : '']">
-                {{ stock.priceChange > 0 ? '+' : '' }}{{ stock.priceChange.toFixed(2) }}%
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 포트폴리오 페이지 -->
-      <div v-if="currentPage === 'portfolio'" class="page-container">
-        <h2 class="page-title">나의 포트폴리오</h2>
-        
-        <div class="portfolio-summary">
-          <div class="summary-item">
-            <span class="summary-label">총 자산:</span>
-            <span class="summary-value">₩{{ totalPortfolioValue.toLocaleString() }}</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">보유 현금:</span>
-            <span class="summary-value">₩{{ playerInfo.playerMoney.toLocaleString() }}</span>
-          </div>
-          <div class="summary-item">
-            <span class="summary-label">보유 주식 가치:</span>
-            <span class="summary-value">₩{{ (totalPortfolioValue - playerInfo.playerMoney).toLocaleString() }}</span>
-          </div>
-        </div>
-        
-        <div class="holdings-table">
-          <div class="table-header">
-            <div class="col-code">종목코드</div>
-            <div class="col-name">종목명</div>
-            <div class="col-quantity">보유수량</div>
-            <div class="col-price">현재가</div>
-            <div class="col-value">평가금액</div>
-            <div class="col-profit">손익률</div>
-          </div>
-          
-          <div v-if="holdings.length === 0" class="no-holdings">
-            보유 중인 주식이 없습니다.
-          </div>
-          
-          <div v-for="(holding, index) in holdings" :key="index" class="table-row">
-            <div class="col-code">{{ holding.stockCode }}</div>
-            <div class="col-name">{{ holding.stockName }}</div>
-            <div class="col-quantity">{{ holding.quantity.toLocaleString() }}</div>
-            <div class="col-price">₩{{ holding.currentPrice.toLocaleString() }}</div>
-            <div class="col-value">₩{{ (holding.quantity * holding.currentPrice).toLocaleString() }}</div>
-            <div :class="['col-profit', holding.profitRate > 0 ? 'up' : holding.profitRate < 0 ? 'down' : '']">
-              {{ holding.profitRate > 0 ? '+' : '' }}{{ holding.profitRate.toFixed(2) }}%
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 시장 현황 페이지 -->
-      <div v-if="currentPage === 'market'" class="page-container">
-        <h2 class="page-title">시장 현황</h2>
-        
-        <div class="market-status-summary">
-          <div class="status-item">
-            <div class="status-circle total">{{ marketStatus.total }}</div>
-            <div class="status-label">전체 종목</div>
-          </div>
-          <div class="status-item">
-            <div class="status-circle up">{{ marketStatus.up }}</div>
-            <div class="status-label">상승</div>
-          </div>
-          <div class="status-item">
-            <div class="status-circle down">{{ marketStatus.down }}</div>
-            <div class="status-label">하락</div>
-          </div>
-          <div class="status-item">
-            <div class="status-circle unchanged">{{ marketStatus.unchanged }}</div>
-            <div class="status-label">변동없음</div>
-          </div>
-        </div>
-        
-        <div class="market-filter">
-          <input type="text" placeholder="종목 검색" v-model="searchStock" class="search-input">
-          <select v-model="sortBy" class="sort-select">
-            <option value="code">종목코드</option>
-            <option value="name">종목명</option>
-            <option value="price">현재가</option>
-            <option value="change">등락률</option>
-          </select>
-        </div>
-        
-        <div class="stocks-table">
-          <div class="table-header">
-            <div class="col-code">종목코드</div>
-            <div class="col-name">종목명</div>
-            <div class="col-price">현재가</div>
-            <div class="col-change">등락률</div>
-            <div class="col-volume">거래량</div>
-            <div class="col-actions">상세/거래</div>
-          </div>
-          
-          <div v-for="(stock, index) in filteredMarketData" :key="index" class="table-row">
-            <div class="col-code">{{ stock.stockCode }}</div>
-            <div class="col-name">{{ stock.stockName }}</div>
-            <div class="col-price">₩{{ stock.currentPrice.toLocaleString() }}</div>
-            <div :class="['col-change', stock.priceChange > 0 ? 'up' : stock.priceChange < 0 ? 'down' : '']">
-              {{ stock.priceChange > 0 ? '+' : '' }}{{ stock.priceChange.toFixed(2) }}%
-            </div>
-            <div class="col-volume">{{ stock.volume.toLocaleString() }}</div>
-            <div class="col-actions">
-              <button class="detail-btn" @click="loadStockDetail(stock.stockCode)">상세</button>
-              <button class="buy-btn" @click="stockToBuy = stock.stockCode; currentPage = 'trade'">매수</button>
-            </div>
-          </div>
-        </div>
-        
-        <!-- 주식 상세 정보 모달 -->
-        <div v-if="selectedStock" class="stock-detail-modal">
-          <div class="modal-content">
-            <div class="modal-header">
-              <h3>{{ selectedStock.stockName }} ({{ selectedStock.stockCode }})</h3>
-              <button class="close-btn" @click="selectedStock = null">×</button>
-            </div>
-            
-            <div class="stock-info">
-              <div class="info-item">
-                <span class="info-label">현재가:</span>
-                <span class="info-value">₩{{ selectedStock.currentPrice.toLocaleString() }}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">등락률:</span>
-                <span :class="['info-value', selectedStock.priceChange > 0 ? 'up' : selectedStock.priceChange < 0 ? 'down' : '']">
-                  {{ selectedStock.priceChange > 0 ? '+' : '' }}{{ selectedStock.priceChange.toFixed(2) }}%
-                </span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">거래량:</span>
-                <span class="info-value">{{ selectedStock.volume.toLocaleString() }}</span>
-              </div>
-              <div class="info-item">
-                <span class="info-label">시가총액:</span>
-                <span class="info-value">₩{{ (selectedStock.currentPrice * selectedStock.outstandingShares).toLocaleString() }}</span>
-              </div>
-            </div>
-            
-            <div class="stock-chart">
-              <!-- 차트 데이터 시각화 (실제로는 Chart.js 등의 라이브러리 사용) -->
-              <div class="chart-placeholder">
-                <div class="chart-title">{{ selectedStock.stockName }} 가격 추이</div>
-                <div class="chart-visual">
-                  <!-- 간단한 차트 시각화 (실제로는 적절한 라이브러리로 대체) -->
-                  <div v-for="(price, index) in stockHistory" :key="index" 
-                       :style="`height: ${price}px; left: ${index * (100 / stockHistory.length)}%`" 
-                       class="chart-bar"></div>
-                </div>
-                <div class="chart-x-axis">
-                  <span v-for="(label, index) in timeLabels" :key="index" 
-                        :style="`left: ${index * (100 / timeLabels.length)}%`" 
-                        class="axis-label">{{ label }}</span>
-                </div>
-              </div>
-            </div>
-            
-            <div class="action-buttons">
-              <button class="buy-btn" @click="stockToBuy = selectedStock.stockCode; currentPage = 'trade'; selectedStock = null">매수</button>
-              <button class="sell-btn" @click="stockToSell = selectedStock.stockCode; currentPage = 'trade'; selectedStock = null">매도</button>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 거래 페이지 -->
-      <div v-if="currentPage === 'trade'" class="page-container">
-        <h2 class="page-title">주식 거래</h2>
-        
-        <div class="trade-content">
-          <div class="trade-balance">
-            <h3>현재 보유 현금</h3>
-            <div class="balance-amount">₩{{ playerInfo.playerMoney.toLocaleString() }}</div>
-          </div>
-          
-          <div class="trade-cards">
-            <div class="trade-card">
-              <h3>주식 매수</h3>
-              <div class="trade-form">
-                <div class="form-group">
-                  <label for="stock-buy">종목코드</label>
-                  <div class="input-container">
-                    <span class="input-icon">📈</span>
-                    <input id="stock-buy" type="text" v-model="stockToBuy" placeholder="종목코드 입력">
-                  </div>
-                </div>
-                
-                <div class="form-group">
-                  <label for="buy-quantity">수량</label>
-                  <div class="input-container">
-                    <span class="input-icon">🔢</span>
-                    <input id="buy-quantity" type="number" v-model="quantity" min="1" placeholder="수량 입력">
-                  </div>
-                </div>
-                
-                <div class="price-estimate" v-if="stockToBuy">
-                  <div class="stock-detail" v-if="marketData.find(s => s.stockCode === stockToBuy)">
-                    <div class="detail-row">
-                      <span class="detail-label">종목명:</span>
-                      <span class="detail-value">{{ marketData.find(s => s.stockCode === stockToBuy).stockName }}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">현재가:</span>
-                      <span class="detail-value">₩{{ marketData.find(s => s.stockCode === stockToBuy).currentPrice.toLocaleString() }}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">예상 금액:</span>
-                      <span class="detail-value">₩{{ (marketData.find(s => s.stockCode === stockToBuy).currentPrice * quantity).toLocaleString() }}</span>
-                    </div>
-                  </div>
-                  <div class="stock-not-found" v-else>
-                    해당 종목을 찾을 수 없습니다.
-                  </div>
-                </div>
-                
-                <button @click="buyStock" class="buy-btn pulse">매수하기</button>
-              </div>
-            </div>
-            
-            <div class="trade-card">
-              <h3>주식 매도</h3>
-              <div class="trade-form">
-                <div class="form-group">
-                  <label for="stock-sell">종목코드</label>
-                  <div class="input-container">
-                    <span class="input-icon">📉</span>
-                    <input id="stock-sell" type="text" v-model="stockToSell" placeholder="종목코드 입력">
-                  </div>
-                </div>
-                
-                <div class="form-group">
-                  <label for="sell-quantity">수량</label>
-                  <div class="input-container">
-                    <span class="input-icon">🔢</span>
-                    <input id="sell-quantity" type="number" v-model="quantity" min="1" placeholder="수량 입력">
-                  </div>
-                </div>
-                
-                <div class="price-estimate" v-if="stockToSell">
-                  <div class="stock-detail" v-if="marketData.find(s => s.stockCode === stockToSell)">
-                    <div class="detail-row">
-                      <span class="detail-label">종목명:</span>
-                      <span class="detail-value">{{ marketData.find(s => s.stockCode === stockToSell).stockName }}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">현재가:</span>
-                      <span class="detail-value">₩{{ marketData.find(s => s.stockCode === stockToSell).currentPrice.toLocaleString() }}</span>
-                    </div>
-                    <div class="detail-row">
-                      <span class="detail-label">예상 금액:</span>
-                      <span class="detail-value">₩{{ (marketData.find(s => s.stockCode === stockToSell).currentPrice * quantity).toLocaleString() }}</span>
-                    </div>
-                    <div class="detail-row" v-if="holdings.find(h => h.stockCode === stockToSell)">
-                      <span class="detail-label">보유 수량:</span>
-                      <span class="detail-value">{{ holdings.find(h => h.stockCode === stockToSell).quantity.toLocaleString() }}</span>
-                    </div>
-                    <div class="detail-row" v-else>
-                      <span class="detail-label warning">주의:</span>
-                      <span class="detail-value warning">해당 종목을 보유하고 있지 않습니다.</span>
-                    </div>
-                  </div>
-                  <div class="stock-not-found" v-else>
-                    해당 종목을 찾을 수 없습니다.
-                  </div>
-                </div>
-                
-                <button @click="sellStock" class="sell-btn pulse">매도하기</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <!-- 파티클 효과 -->
     <div class="particles-container">
       <div class="particle"></div>
       <div class="particle"></div>
@@ -589,5 +75,580 @@ onMounted(() => {
       <div class="particle"></div>
       <div class="particle"></div>
     </div>
+    
+    <div class="dashboard-layout">
+      <div class="side-menu auth-card">
+        <div class="card-decoration"></div>
+        <div class="user-profile">
+          <div class="avatar-container">
+            <img :src="profileImage" alt="프로필 이미지" class="profile-image">
+          </div>
+          <div class="user-info">
+            <div class="user-name">player: {{ playerId }}</div>
+            <div class="user-balance">{{ formattedMoney }}</div>
+          </div>
+        </div>
+        
+        <div class="menu-items">
+          <div class="menu-item active">
+            <div class="menu-icon">📊</div>
+            <span>대시보드</span>
+          </div>
+          <div class="menu-item" @click="router.push({ path: '/transactions', query: { playerId } })">
+            <div class="menu-icon">⏱️</div>
+            <span>거래 내역</span>
+          </div>
+          <div class="menu-item logout" @click="logout">
+            <div class="menu-icon">🚪</div>
+            <span>로그아웃</span>
+          </div>
+        </div>
+      </div>
+      
+      <div class="main-content">
+        <div class="welcome-section">
+          <h1>대시보드</h1>
+          <p>실시간 주식 시장 정보와 거래를 한눈에 확인하세요.</p>
+          
+          <div class="user-profile-small">
+            <div class="profile-image-container">
+              <img :src="profileImage" alt="프로필 이미지" class="profile-image">
+              <label class="image-upload-label">
+                <input type="file" @change="uploadProfileImage" accept="image/*" class="image-upload">
+                <span class="upload-icon">📷</span>
+              </label>
+            </div>
+          </div>
+        </div>
+        
+        <div class="balance-card auth-card">
+          <div class="card-decoration"></div>
+          <div class="balance-title">총 보유자산</div>
+          <div class="balance-amount">{{ formattedMoney }}</div>
+        </div>
+        
+        <div class="dashboard-content">
+          <div class="stock-holdings auth-card">
+            <div class="card-decoration"></div>
+            <h2>보유 주식</h2>
+            <AllStocks />
+          </div>
+          
+          <div class="stock-trading auth-card">
+            <div class="card-decoration"></div>
+            <h2>주식 거래</h2>
+            <StockTrading :playerId="playerId" @update-player="fetchPlayerInfo" />
+          </div>
+        </div> 
+      </div>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* 공통 스타일 시작 */
+.view-container {
+  max-width: 2000px;
+  margin: 0 auto;
+  min-height: 100vh;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg, #f5f7fa 0%, #e4ecfb 100%);
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  padding: 20px;
+}
+
+h1, h2, h3 {
+  color: #1a365d;
+  font-weight: 700;
+}
+
+/* 애니메이션 배경 */
+.animated-bg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100%;
+  background: white;
+  border-radius: 30%;
+  z-index: -1;
+}
+
+.animated-bg::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  right: -50%;
+  bottom: -50%;
+  background: radial-gradient(circle, rgb(255, 255, 255) 0%, rgba(49, 130, 206, 0) 70%);
+  animation: pulse-bg 15s infinite;
+}
+
+@keyframes pulse-bg {
+  0% { transform: scale(1); opacity: 0.5; }
+  50% { transform: scale(1.2); opacity: 0.3; }
+  100% { transform: scale(1); opacity: 0.5; }
+}
+
+/* 파티클 효과 */
+.particles-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  z-index: -1;
+}
+
+.particle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: rgba(66, 153, 225, 0.3);
+  border-radius: 50%;
+  z-index: -1;
+}
+
+.particle:nth-child(1) {
+  top: 10%;
+  left: 20%;
+  animation: float 25s infinite linear;
+}
+
+.particle:nth-child(2) {
+  top: 30%;
+  left: 80%;
+  animation: float 20s infinite linear;
+  width: 12px;
+  height: 12px;
+}
+
+.particle:nth-child(3) {
+  top: 70%;
+  left: 15%;
+  animation: float 22s infinite linear;
+  width: 10px;
+  height: 10px;
+}
+
+.particle:nth-child(4) {
+  top: 40%;
+  left: 90%;
+  animation: float 18s infinite linear;
+  width: 6px;
+  height: 6px;
+}
+
+.particle:nth-child(5) {
+  top: 85%;
+  left: 60%;
+  animation: float 24s infinite linear;
+  width: 14px;
+  height: 14px;
+}
+
+@keyframes float {
+  0% { transform: translate(0, 0) rotate(0deg); opacity: 0.3; }
+  25% { transform: translate(-100px, 100px) rotate(90deg); opacity: 0.7; }
+  50% { transform: translate(100px, 200px) rotate(180deg); opacity: 0.3; }
+  75% { transform: translate(200px, -100px) rotate(270deg); opacity: 0.7; }
+  100% { transform: translate(0, 0) rotate(360deg); opacity: 0.3; }
+}
+
+/* 대시보드 레이아웃 */
+.dashboard-layout {
+  display: flex;
+  gap: 25px;
+  align-items: stretch
+}
+
+/* 카드 공통 스타일 */
+.auth-card {
+  background-color: white;
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(49, 130, 206, 0.15);
+  padding: 25px;
+  transition: all 0.4s ease;
+  position: relative;
+  overflow: hidden;
+  z-index: 1;
+}
+
+.auth-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 20px 40px rgba(49, 130, 206, 0.2);
+}
+
+.card-decoration {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 150px;
+  height: 150px;
+  background: linear-gradient(135deg, rgba(49, 130, 206, 0.1), rgba(66, 153, 225, 0.05));
+  border-radius: 0 0 0 100%;
+  z-index: -1;
+}
+
+.card-decoration::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100px;
+  height: 100px;
+  background: linear-gradient(135deg, rgba(49, 130, 206, 0.05), rgba(66, 153, 225, 0.02));
+  border-radius: 100% 0 0 0;
+}
+
+/* 타이틀 섹션 스타일 */
+.welcome-section {
+  text-align: center;
+  margin-bottom: 25px;
+  padding: 30px 20px;
+  border-radius: 20px;
+  position: relative;
+  background: rgba(255, 255, 255, 0.5);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.05);
+  animation: slideIn 1s ease-out;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.welcome-section h1 {
+  font-size: 2.4rem;
+  background: linear-gradient(45deg, #2b6cb0, #4299e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 4px 8px rgba(66, 153, 225, 0.2);
+  margin: 0;
+}
+
+.welcome-section p {
+  font-size: 1.1rem;
+  color: #4a5568;
+  line-height: 1.7;
+  margin: 0;
+  margin-left: 20px;
+  flex: 1;
+  text-align: left;
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 사이드 메뉴 스타일 */
+.side-menu {
+  width: 280px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-self: stretch
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+}
+
+.avatar-container {
+  margin-right: 15px;
+  margin-left: 15px;
+}
+
+.avatar {
+  width: 50px;
+  height: 50px;
+  background: linear-gradient(135deg, #4279ff 0%, #2563eb 100%);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 20px;
+  box-shadow: 0 4px 10px rgba(66, 121, 255, 0.3);
+}
+
+.user-info {
+  flex: 1;
+  margin-left: -10px; /* 이 값을 조정하여 더 왼쪽으로 이동 */
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 18px;
+  color: #2d3748;
+  margin-bottom: 4px;
+  text-align: left; 
+  margin-left: -15px;/* 왼쪽 정렬 확실히 하기 */
+}
+
+
+.user-balance {
+  font-size: 18px;
+  color: #4a5568;
+  font-weight: 500;
+  margin-left: -15px;
+  text-align: left;
+}
+
+.menu-items {
+  display: flex;
+  flex-direction: column;
+  flex: 1; /* 남은 공간을 모두 차지하도록 설정 */
+  justify-content: flex-start; /* 상단 정렬 */
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 14px;
+  color: #4a5568;
+  font-size: 20px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.menu-item:hover {
+  background-color: #f0f5ff;
+  color: #3182ce;
+}
+
+.menu-item.active {
+  background-color: #ebf8ff;
+  color: #3182ce;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(66, 153, 225, 0.15);
+}
+
+.menu-icon {
+  width: 20px;
+  height: 20px;
+  margin-right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.menu-item.logout {
+  color: #e53e3e;
+}
+
+/* 메인 콘텐츠 스타일 */
+.main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.user-profile-small {
+  display: flex;
+  align-items: center;
+}
+
+.profile-image-container {
+  position: relative;
+  width: 42px;
+  height: 42px;
+}
+
+.profile-image {
+  width: 70%;
+  height: 50%;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #60a5fa;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+.image-upload-label {
+  position: absolute;
+  bottom: -3px;
+  right: -3px;
+  background-color: #3182ce;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.image-upload-label:hover {
+  background-color: #2563eb;
+  transform: scale(1.1);
+}
+
+.image-upload {
+  display: none;
+}
+
+.upload-icon {
+  font-size: 10px;
+  color: white;
+}
+
+/* 금액 카드 */
+.balance-card {
+  margin-bottom: 25px;
+  padding: 25px 30px;
+}
+
+.balance-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: #4a5568;
+  margin-bottom: 10px;
+}
+
+.balance-amount {
+  font-size: 32px;
+  font-weight: 700;
+  background: linear-gradient(45deg, #2b6cb0, #4299e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* 대시보드 콘텐츠 */
+.dashboard-content {
+  display: flex;
+  gap: 25px;
+  margin-bottom: 25px;
+}
+
+.stock-holdings, .stock-trading {
+  flex: 1;
+  padding: 25px;
+}
+
+h2 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #edf2f7;
+  background: linear-gradient(45deg, #2b6cb0, #4299e1);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  position: relative;
+}
+
+h2::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 50px;
+  height: 3px;
+  background: linear-gradient(90deg, #3182ce, #63b3ed);
+  border-radius: 2px;
+}
+
+/* 반응형 스타일 */
+@media (max-width: 1200px) {
+  .dashboard-content {
+    flex-direction: column;
+  }
+  
+  .stock-holdings, .stock-trading {
+    width: 100%;
+  }
+}
+
+@media (max-width: 992px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+  
+  .side-menu {
+    width: 100%;
+    margin-bottom: 25px;
+  }
+  
+  .menu-items {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .menu-item {
+    flex: 1;
+    min-width: 120px;
+    text-align: center;
+    padding: 12px 8px;
+  }
+  
+  .menu-icon {
+    margin-right: 6px;
+  }
+  
+  .menu-item.logout {
+    margin-top: 0;
+  }
+}
+
+@media (max-width: 768px) {
+  .welcome-section {
+    flex-direction: column;
+    text-align: center;
+    padding: 20px 15px;
+  }
+  
+  .welcome-section h1 {
+    font-size: 2rem;
+    margin-bottom: 10px;
+  }
+  
+  .welcome-section p {
+    font-size: 1rem;
+    margin-left: 0;
+    text-align: center;
+    margin-bottom: 15px;
+  }
+  
+  .user-profile-small {
+    margin-top: 15px;
+  }
+  
+  .balance-amount {
+    font-size: 26px;
+  }
+  
+  .menu-item {
+    padding: 10px 6px;
+    min-width: 100px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .welcome-section h1 {
+    font-size: 1.8rem;
+  }
+  
+  .transaction-item {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .transaction-icon {
+    margin-bottom: 10px;
+  }
+  
+  .transaction-amount {
+    margin-top: 10px;
+    align-self: flex-end;
+  }
+}
+</style>

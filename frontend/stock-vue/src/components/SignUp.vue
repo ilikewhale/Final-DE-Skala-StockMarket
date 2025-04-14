@@ -477,7 +477,7 @@ const signup = async () => {
     <div class="welcome-section">
       <div class="animated-bg"></div>
       <h1>사용자 등록</h1>
-      <p>Stokala에 참여하기 위한 계정을 만들어보세요.</p>
+      <p>Stockala에 참여하기 위한 계정을 만들어보세요.</p>
     </div>
 
     <div class="auth-card">

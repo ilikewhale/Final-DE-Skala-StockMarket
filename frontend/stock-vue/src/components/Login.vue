@@ -1060,7 +1060,7 @@ h1, h2, h3 {
   <div class="view-container">
     <div class="welcome-section">
       <div class="animated-bg"></div>
-      <h1>Stokala 오신 것을 환영합니다!</h1>
+      <h1>Stockala 오신 것을 환영합니다!</h1>
       <p>이 플랫폼은 실제 주식 거래를 실시간으로 체험할 수 있는 웹 서비스입니다.</p> 
       <p>다양한 주식을 사고팔며, 시장의 변화를 실시간으로 반영한 거래를 경험할 수 있습니다.</p>
      <p>"초보자부터 전문가까지 누구나 자신만의 투자 전략을 시험하고, 주식 시장의 흐름을 이해할 수 있습니다!"</p>
@@ -1152,7 +1152,7 @@ const signin = async () => {
     const response = await axios.post(url, requestBody);
     if (response.data) {
       alert('로그인 성공!');
-      router.push({ path: '/home', query: { playerId: playerId.value } });
+      router.push({ path: '/dashboard', query: { playerId: playerId.value } });
     } else {
       errorMessage.value = '아이디 또는 비밀번호가 일치하지 않습니다.';
     }
